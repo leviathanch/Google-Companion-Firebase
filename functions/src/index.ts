@@ -6,6 +6,7 @@ import axios from "axios";
 
 admin.initializeApp();
 const db = admin.firestore();
+db.settings({ databaseId: 'companion' });
 const app = express();
 
 // 1. JSON Body Parser (Critical for POST requests)
@@ -117,6 +118,31 @@ app.delete("/search_history", async (req: any, res: any) => {
     res.json({ success: true });
   } catch (e: any) {
     console.error("DELETE /search_history Error:", e);
+    res.status(500).send(e.message);
+  }
+});
+
+// --- SETTINGS ENDPOINTS ---
+
+app.get("/settings", async (req: any, res: any) => {
+  try {
+    const userId = req.user.sub;
+    const doc = await db.doc(`users/${userId}/settings/config`).get();
+    res.json(doc.exists ? doc.data() : {});
+  } catch (e: any) {
+    console.error("GET /settings Error:", e);
+    res.status(500).send(e.message);
+  }
+});
+
+app.post("/settings", async (req: any, res: any) => {
+  try {
+    const userId = req.user.sub;
+    const config = req.body;
+    await db.doc(`users/${userId}/settings/config`).set(config);
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error("POST /settings Error:", e);
     res.status(500).send(e.message);
   }
 });
