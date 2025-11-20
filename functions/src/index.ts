@@ -8,10 +8,13 @@ admin.initializeApp();
 const db = admin.firestore();
 const app = express();
 
-// Allow CORS from any origin
+// 1. JSON Body Parser (Critical for POST requests)
+app.use(express.json());
+
+// 2. CORS
 app.use(cors({ origin: true }));
 
-// Middleware: Authenticate User via Google Access Token
+// 3. Auth Middleware
 const authenticate = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -22,13 +25,9 @@ const authenticate = async (req: express.Request, res: express.Response, next: e
   const accessToken = authHeader.split("Bearer ")[1];
 
   try {
-    // Verify the token with Google
     const response = await axios.get(`https://www.googleapis.com/oauth2/v3/userinfo`, {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
-
-    // Attach user info to request
-    // 'sub' is the unique Google User ID
     (req as any).user = response.data;
     next();
   } catch (error) {
@@ -41,7 +40,6 @@ app.use(authenticate);
 
 // --- MEMORIES ENDPOINTS ---
 
-// GET Memories
 app.get("/memories", async (req: any, res: any) => {
   try {
     const userId = req.user.sub;
@@ -49,23 +47,26 @@ app.get("/memories", async (req: any, res: any) => {
     const memories = snapshot.docs.map(doc => doc.data());
     res.json(memories);
   } catch (e: any) {
+    console.error("GET /memories Error:", e);
     res.status(500).send(e.message);
   }
 });
 
-// POST Memory
 app.post("/memories", async (req: any, res: any) => {
   try {
     const userId = req.user.sub;
-    const memory = req.body; // { id, text, timestamp }
+    const memory = req.body;
+    if (!memory || !memory.id) throw new Error("Invalid memory object: Missing ID");
+    
+    console.log(`Saving memory for user ${userId}:`, memory.id);
     await db.doc(`users/${userId}/memories/${memory.id}`).set(memory);
     res.json({ success: true });
   } catch (e: any) {
+    console.error("POST /memories Error:", e);
     res.status(500).send(e.message);
   }
 });
 
-// DELETE Memory
 app.delete("/memories/:id", async (req: any, res: any) => {
   try {
     const userId = req.user.sub;
@@ -73,13 +74,13 @@ app.delete("/memories/:id", async (req: any, res: any) => {
     await db.doc(`users/${userId}/memories/${memoryId}`).delete();
     res.json({ success: true });
   } catch (e: any) {
+    console.error("DELETE /memories Error:", e);
     res.status(500).send(e.message);
   }
 });
 
 // --- SEARCH HISTORY ENDPOINTS ---
 
-// GET Search History
 app.get("/search_history", async (req: any, res: any) => {
   try {
     const userId = req.user.sub;
@@ -87,23 +88,25 @@ app.get("/search_history", async (req: any, res: any) => {
     const history = snapshot.docs.map(doc => doc.data());
     res.json(history);
   } catch (e: any) {
+    console.error("GET /search_history Error:", e);
     res.status(500).send(e.message);
   }
 });
 
-// POST Search History
 app.post("/search_history", async (req: any, res: any) => {
   try {
     const userId = req.user.sub;
     const item = req.body;
+    if (!item || !item.id) throw new Error("Invalid search item: Missing ID");
+
     await db.doc(`users/${userId}/search_history/${item.id}`).set(item);
     res.json({ success: true });
   } catch (e: any) {
+    console.error("POST /search_history Error:", e);
     res.status(500).send(e.message);
   }
 });
 
-// DELETE Search History (Clear All)
 app.delete("/search_history", async (req: any, res: any) => {
   try {
     const userId = req.user.sub;
@@ -113,6 +116,7 @@ app.delete("/search_history", async (req: any, res: any) => {
     await batch.commit();
     res.json({ success: true });
   } catch (e: any) {
+    console.error("DELETE /search_history Error:", e);
     res.status(500).send(e.message);
   }
 });
