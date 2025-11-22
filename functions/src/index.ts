@@ -147,4 +147,49 @@ app.post("/settings", async (req: any, res: any) => {
   }
 });
 
+// GET Chat History
+app.get("/chat_history", async (req: any, res: any) => {
+  try {
+    const userId = req.user.sub;
+    // Order by timestamp ascending so it reads like a chat log
+    const snapshot = await db.collection(`users/${userId}/chat_history`).orderBy("timestamp", "asc").limit(100).get();
+    const history = snapshot.docs.map(doc => doc.data());
+    res.json(history);
+  } catch (e: any) {
+    console.error("GET /chat_history Error:", e);
+    res.status(500).send(e.message);
+  }
+});
+
+// POST Chat Message
+app.post("/chat_history", async (req: any, res: any) => {
+  try {
+    const userId = req.user.sub;
+    const message = req.body; // { id, role, text, timestamp }
+    if (!message || !message.id) throw new Error("Invalid chat message: Missing ID");
+
+    await db.doc(`users/${userId}/chat_history/${message.id}`).set(message);
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error("POST /chat_history Error:", e);
+    res.status(500).send(e.message);
+  }
+});
+
+// DELETE Chat History (Clear All)
+app.delete("/chat_history", async (req: any, res: any) => {
+  try {
+    const userId = req.user.sub;
+    const batch = db.batch();
+    const snapshot = await db.collection(`users/${userId}/chat_history`).get();
+    snapshot.docs.forEach((doc) => batch.delete(doc.ref));
+    await batch.commit();
+    res.json({ success: true });
+  } catch (e: any) {
+    console.error("DELETE /chat_history Error:", e);
+    res.status(500).send(e.message);
+  }
+});
+
+
 export const api = onRequest(app);
